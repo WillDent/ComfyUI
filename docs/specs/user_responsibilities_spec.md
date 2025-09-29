@@ -14,3 +14,35 @@ Captures the minimal steps end users must perform after installing ComfyUI via a
 
 ## Keeping Installations Updated
 - Portable and installer distributions may provide helper scripts (e.g., `update_comfyui.bat`) or expose the `--windows-standalone-build` flag to refresh bundled components. Users should follow distribution-specific instructions to stay current between official release packages.【F:main.py†L297-L308】
+
+## Reference First-Run Checklist
+Distributors can embed an interactive checklist to confirm end users have staged both local and remote assets before starting the server.
+
+```python
+from __future__ import annotations
+
+from pathlib import Path
+
+def confirm_first_run() -> None:
+    checkpoints = Path("models/checkpoints")
+    if not any(checkpoints.glob("*.safetensors")):
+        print("⚠️  Add at least one checkpoint to models/checkpoints")
+
+    extra_path = Path("extra_model_paths.yaml")
+    if extra_path.exists():
+        print("✅ Custom model paths configured")
+    else:
+        print("ℹ️  Create extra_model_paths.yaml to reference shared or remote stores")
+
+    remote_cfg = Path("user/remote_endpoints.yaml")
+    if remote_cfg.exists():
+        print("✅ Remote inference endpoints detected")
+    else:
+        print("ℹ️  Optional: define user/remote_endpoints.yaml for API-based models")
+
+
+if __name__ == "__main__":
+    confirm_first_run()
+```
+
+Pairing this checklist with onboarding docs helps non-technical users understand that model files are user-supplied and that optional remote providers require separate credentials, reinforcing the expectations documented in the README.【F:README.md†L174-L200】

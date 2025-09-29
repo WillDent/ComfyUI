@@ -20,3 +20,51 @@ Summarizes the officially documented procedures for configuring ComfyUI across d
 
 ## Ascend, Cambricon, and Iluvatar Accelerators
 - Each vendor requires installing its toolkit and PyTorch extension (torch-npu, torch_mlu, or Iluvatar Corex Toolkit) before running `python main.py`. The README links to vendor-specific installation guides to ensure users meet prerequisites.【F:README.md†L272-L295】
+
+## Reference Device Negotiation Helper
+Bundle launchers can detect accelerator availability and select the appropriate CLI flags before invoking `main.py` by using a helper like the following.
+
+```python
+from __future__ import annotations
+
+import os
+import shutil
+import subprocess
+
+
+def detect_accelerator() -> str:
+    if shutil.which("nvidia-smi"):
+        return "cuda"
+    if shutil.which("rocminfo"):
+        return "rocm"
+    if shutil.which("intel_gpu_top"):
+        return "xpu"
+    if os.name == "posix" and subprocess.call(["sysctl", "machdep.cpu.brand_string"], stdout=subprocess.DEVNULL) == 0:
+        return "metal"
+    if shutil.which("dml_diag"):
+        return "directml"
+    return "cpu"
+
+
+def build_launch_command() -> list[str]:
+    accelerator = detect_accelerator()
+    match accelerator:
+        case "cuda":
+            return ["python", "main.py"]
+        case "rocm":
+            return ["python", "main.py", "--hip"]
+        case "xpu":
+            return ["python", "main.py", "--use-xpu"]
+        case "metal":
+            return ["python", "main.py", "--use-metal"]
+        case "directml":
+            return ["python", "main.py", "--directml"]
+        case _:
+            return ["python", "main.py", "--cpu"]
+
+
+if __name__ == "__main__":
+    print("Launching:", " ".join(build_launch_command()))
+```
+
+Mapping detections to the documented CLI switches keeps end-user experiences consistent with the README guidance while allowing distributors to plug in remote inference fallbacks when no supported accelerator is present.【F:README.md†L200-L315】

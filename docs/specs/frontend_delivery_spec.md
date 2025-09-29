@@ -18,3 +18,42 @@ Describes how ComfyUI packages, validates, and serves its web frontend so deskto
 
 ## Feature Flag Negotiation
 - Websocket clients send their supported feature flags on the first message; the server records them and replies with server-side capabilities. Frontend releases rely on this negotiation to opt into features like preview metadata without breaking older builds.【F:server.py†L188-L236】
+
+## Reference Frontend Sync Script
+Operators who fork the UI can automate wheel promotion and backend validation with the following Python utility.
+
+```python
+from __future__ import annotations
+
+import subprocess
+from pathlib import Path
+
+REPO = "org/custom-frontend"
+TAG = "v1.2.3"
+
+
+def download_frontend(dist_dir: Path) -> Path:
+    asset = f"https://github.com/{REPO}/releases/download/{TAG}/dist.zip"
+    archive = dist_dir / "dist.zip"
+    archive.write_bytes(subprocess.check_output(["curl", "-L", asset]))
+    subprocess.run(["unzip", "-o", str(archive), "-d", str(dist_dir)], check=True)
+    return dist_dir / "dist"
+
+
+def install_frontend(frontend_root: Path) -> None:
+    subprocess.run([
+        "python", "-m", "pip", "install", "comfyui-frontend-package==1.*", "--upgrade"
+    ], check=True)
+    custom_root = Path("web_custom_versions") / TAG
+    if custom_root.exists():
+        subprocess.run(["rm", "-rf", str(custom_root)])
+    subprocess.run(["cp", "-R", str(frontend_root), str(custom_root)], check=True)
+
+
+if __name__ == "__main__":
+    dist_dir = Path("build")
+    dist_dir.mkdir(exist_ok=True)
+    install_frontend(download_frontend(dist_dir))
+```
+
+Desktop bundles can call this during CI to stage alternates inside `web_custom_versions` while still relying on the pinned wheel as the default experience, aligning with `FrontendManager`’s discovery logic.【F:app/frontend_management.py†L82-L214】

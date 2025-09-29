@@ -20,3 +20,43 @@ Outlines the Python runtime expectations for ComfyUI across manual installs, por
 
 ## Runtime Launch Commands
 - Regardless of distribution, users ultimately run `python main.py` (or a wrapper) after installing dependencies. Environment variables like `HSA_OVERRIDE_GFX_VERSION` and `TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL` provide optional tuning knobs for AMD GPUs, which installers may expose through helper scripts.【F:README.md†L296-L315】
+
+## Reference Environment Verifier
+Bundle creators can embed an environment probe similar to the following to guarantee consistency before launching the UI.
+
+```python
+from __future__ import annotations
+
+import importlib
+import sys
+from pathlib import Path
+
+REQUIRED_MODULES = {
+    "torch": "2.5.1",
+    "torchvision": "0.20.1",
+    "torchaudio": "2.5.1",
+    "aiohttp": "3.10.8",
+    "sqlalchemy": "2.0.36",
+    "comfyui-frontend-package": "1.*",
+}
+
+
+def verify_environment() -> None:
+    if sys.version_info < (3, 12):
+        raise RuntimeError("Desktop bundles should embed Python 3.12 or newer")
+
+    for module_name, expected_version in REQUIRED_MODULES.items():
+        module = importlib.import_module(module_name.replace("-", "_"))
+        assert module.__version__.startswith(expected_version.rstrip("*")), (
+            f"{module_name} {module.__version__} does not match {expected_version}"
+        )
+
+    if not Path("models/checkpoints").exists():
+        Path("models/checkpoints").mkdir(parents=True, exist_ok=True)
+
+
+if __name__ == "__main__":
+    verify_environment()
+```
+
+Extend `REQUIRED_MODULES` with accelerator-specific packages (e.g., `torch-directml`, ROCm wheels) depending on the target OS. For hosted-model deployments, add optional checks for REST client libraries or gRPC stubs before handing prompts to remote services, keeping parity with the local dependency graph.【F:README.md†L193-L315】

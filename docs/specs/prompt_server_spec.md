@@ -32,3 +32,75 @@ Defines the responsibilities of `server.py` and the `PromptServer` class that wr
 
 ## TLS and Client Session Reuse
 - The server maintains an aiohttp client session for outbound requests (e.g., fetching remote custom nodes) and respects TLS settings provided at launch, allowing desktop builds to bundle certificates or reuse system ones without modification.【F:server.py†L143-L160】
+
+## Reference Service Blueprint
+The snippet below turns these behaviours into a portable template suitable for projects that orchestrate local and remote inference endpoints.
+
+```python
+from __future__ import annotations
+
+import asyncio
+from dataclasses import dataclass
+from typing import Any, AsyncIterator, Callable
+
+from aiohttp import web
+
+
+@dataclass
+class PromptJob:
+    id: str
+    graph: dict[str, Any]
+    assets: dict[str, Any]
+
+
+class PromptGateway:
+    def __init__(self, execute: Callable[[PromptJob], AsyncIterator[dict[str, Any]]]):
+        self._execute = execute
+        self._queue: asyncio.Queue[PromptJob] = asyncio.Queue()
+        self._subscribers: set[Callable[[str, dict[str, Any]], Any]] = set()
+
+    async def submit(self, job: PromptJob) -> str:
+        await self._queue.put(job)
+        return job.id
+
+    def subscribe(self, callback: Callable[[str, dict[str, Any]], Any]) -> None:
+        self._subscribers.add(callback)
+
+    async def worker_loop(self) -> None:
+        while True:
+            job = await self._queue.get()
+            async for update in self._execute(job):
+                await self.broadcast(job.id, update)
+
+    async def broadcast(self, job_id: str, payload: dict[str, Any]) -> None:
+        for callback in list(self._subscribers):
+            callback(job_id, payload)
+
+
+async def create_app(gateway: PromptGateway) -> web.Application:
+    app = web.Application()
+    app["gateway"] = gateway
+
+    async def submit_handler(request: web.Request) -> web.Response:
+        body = await request.json()
+        job = PromptJob(**body)
+        job_id = await gateway.submit(job)
+        return web.json_response({"id": job_id})
+
+    app.router.add_post("/api/prompts", submit_handler)
+    # Add websocket handler mirroring ComfyUI's `prompt_socket_handler`.
+    return app
+
+
+def start_prompt_server(execute_fn: Callable[[PromptJob], AsyncIterator[dict[str, Any]]]) -> None:
+    gateway = PromptGateway(execute_fn)
+    loop = asyncio.get_event_loop()
+    loop.create_task(gateway.worker_loop())
+    web.run_app(loop.run_until_complete(create_app(gateway)))
+```
+
+Design cues:
+
+- **Async iterators** let `execute_fn` stream preview updates from either local GPU inference or hosted APIs, matching ComfyUI’s websocket cadence.【F:server.py†L188-L236】
+- The pub/sub registry in `PromptGateway.broadcast` echoes how ComfyUI fans notifications to every websocket session, which is vital when multiple clients collaborate on the same queue.【F:server.py†L126-L173】
+- Keeping the HTTP endpoint names aligned with ComfyUI simplifies frontend reuse: an installer can swap in a different backend while leaving the shipped web client untouched.

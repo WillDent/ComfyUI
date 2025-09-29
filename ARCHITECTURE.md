@@ -19,3 +19,31 @@ This index links to dedicated specification documents that describe each major s
 
 ## Frontend Delivery
 - [Frontend Delivery Specification](docs/specs/frontend_delivery_spec.md) — covers how the `comfyui-frontend-package` wheel is managed, how alternate frontends are fetched, and how the server serves static assets with feature flag negotiation.【F:requirements.txt†L1-L2】【F:app/frontend_management.py†L19-L214】【F:server.py†L175-L245】
+
+## Reference High-Level Topology
+Use this ASCII diagram and accompanying pseudocode as a starting point for new projects inspired by ComfyUI’s architecture.
+
+```
+┌────────────┐       ┌─────────────┐       ┌──────────────────┐
+│ Frontend   │◀────▶│ Prompt API  │◀────▶│ Execution Workers │
+└────────────┘   WS │ (aiohttp)   │ REST │  (local/remote)   │
+        ▲           └─────────────┘       └──────────────────┘
+        │                  ▲                       ▲
+        │                  │                       │
+        │                  │                       │
+        ▼                  │                       │
+┌────────────┐       ┌────────────┐        ┌────────────────┐
+│ Model Repo │◀────▶│ Asset Map  │◀──────▶│ Remote Adapters │
+└────────────┘       └────────────┘        └────────────────┘
+```
+
+```python
+def launch_application():
+    config = load_config_files()
+    registry = build_asset_registry(config.local_paths, config.remote_endpoints)
+    prompt_server = build_prompt_server(registry, feature_flags=config.frontend_flags)
+    worker_pool = start_execution_workers(prompt_server.queue, registry)
+    prompt_server.run(worker_pool)
+```
+
+Swap `build_execution_workers` for cloud queues or hosted inference when planning remote-first deployments, and feed the same registry into the frontend API so users can discover both local folders and API-backed models without special casing.

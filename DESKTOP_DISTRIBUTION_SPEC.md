@@ -19,3 +19,18 @@ This document indexes the detailed specifications that describe every aspect of 
 ## User Guidance
 - [User Responsibilities Specification](docs/specs/user_responsibilities_spec.md) — lists the post-install tasks end users must perform, regardless of whether they use an installer, portable package, or manual setup.【F:README.md†L174-L200】【F:main.py†L25-L350】
 - [Hardware Support Specification](docs/specs/hardware_support_spec.md) — aggregates accelerator-specific installation instructions to include in release notes or onboarding dialogs.【F:README.md†L200-L315】
+
+## Reference Distribution Matrix
+Use the following matrix template when planning new bundles that mix local weights with remote APIs.
+
+```markdown
+| Channel              | Python Runtime | Dependency Source      | Model Strategy              | Update Path                 |
+|----------------------|----------------|------------------------|-----------------------------|-----------------------------|
+| Windows Installer    | Embedded 3.12  | requirements.txt wheel | Precreate folders + remote  | In-app updater + releases   |
+| macOS Installer      | Embedded 3.12  | requirements.txt wheel | Prompt remote fallback      | Sparkle / auto-update feed  |
+| Windows Portable     | Embedded 3.12  | Preinstalled site-pack | Local only, user-managed    | update\update_comfyui.bat   |
+| Manual (All OS)      | System Python  | pip install -r         | User-managed + YAML remaps  | Git pull + pip upgrade      |
+| Cloud / API Hybrid   | Container 3.12 | requirements.txt wheel | Remote-first, cache locally | CI redeploy                  |
+```
+
+Extend rows to cover new operating systems or container targets, ensuring each entry points back to the detailed specification responsible for that distribution path.

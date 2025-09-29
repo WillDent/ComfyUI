@@ -43,3 +43,55 @@ This document details how `main.py` prepares the ComfyUI runtime before the serv
 
 ## Runtime Version Reporting and Shutdown
 - On direct execution the launcher logs the Python interpreter version and the packaged ComfyUI version, warns when running under Python <3.10, and then runs the event loop until interruption. Cleanup always removes the temp directory—even on Ctrl+C—so repeated launches remain deterministic.【F:main.py†L353-L369】
+
+## Reference Bootstrap Template
+The following snippet distills the startup sequence into a reusable helper for other AI runtimes that need to juggle local folders and remote APIs. It mirrors the behaviours above while exposing hooks you can adapt for alternate dependency graphs.
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Iterable, Mapping
+
+
+@dataclass
+class RuntimeConfig:
+    root: Path
+    models: Mapping[str, Iterable[Path]]  # e.g. {"checkpoints": [Path("/mnt/models")]}
+    remote_models: Mapping[str, str]      # name -> REST or gRPC endpoint
+    temp_dir: Path
+    log_level: str = "INFO"
+    auto_launch: bool = False
+
+
+def bootstrap_runtime(config: RuntimeConfig) -> None:
+    """Prepare directories, environment variables, and execution threads."""
+    enable_cli_parser()
+    configure_logging(config.log_level)
+    disable_vendor_telemetry()
+
+    register_model_paths(config.root, config.models)
+    register_remote_providers(config.remote_models)
+    prepare_runtime_directories(config.root, config.temp_dir)
+    execute_custom_prelaunch_scripts(config.root / "custom_nodes")
+
+    selected_device = resolve_device_from_cli()
+    configure_accelerator_env(selected_device)
+
+    start_prompt_worker_thread(cache_policy=read_cache_policy())
+    attach_progress_hooks()
+    cleanup_temp_on_exit(config.temp_dir)
+
+    loop = get_or_create_event_loop()
+    server = build_prompt_server(loop=loop)
+    if config.auto_launch:
+        schedule_browser_launch(server.listen_host, server.listen_port)
+    loop.run_until_complete(server.start())
+```
+
+Key extension points:
+
+- **`register_remote_providers`** should load API credentials from the user profile and expose stub nodes that hand prompts to hosted inference providers, providing parity with on-disk weights.
+- **`configure_accelerator_env`** can switch between CUDA, ROCm, DirectML, or CPU-only execution based on detected hardware, matching the environment management performed in `main.py` while remaining portable to other projects.【F:main.py†L117-L140】
+- **`start_prompt_worker_thread`** demonstrates how to keep the UI responsive while heavier graph executions run asynchronously, mirroring ComfyUI’s daemon worker loop.【F:main.py†L156-L234】

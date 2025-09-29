@@ -17,3 +17,40 @@ Documents the expectations for the Windows portable 7z archive so release engine
 
 ## Update Mechanism
 - Windows standalone launches may pass `--windows-standalone-build`, triggering the updater bridge in `main.py` to refresh the packaged updater binaries. Portable distributions should either expose this flag or document how to run `update\update_comfyui.bat` to stay current between archive refreshes.【F:main.py†L297-L308】
+
+## Reference Packing Script
+The example below demonstrates how to assemble a portable archive that mirrors the official distribution while leaving hooks for alternative model sources.
+
+```powershell
+$ErrorActionPreference = 'Stop'
+
+$root = "C:\\ComfyUI-Portable"
+$python = "$root\\python"
+
+New-Item -ItemType Directory -Force -Path $root | Out-Null
+
+Copy-Item -Recurse -Force .\ComfyUI $root
+Copy-Item -Recurse -Force .\python_embeded $python
+
+& "$python\\python.exe" -m pip install --upgrade pip
+& "$python\\python.exe" -m pip install -r "$root\\ComfyUI\\requirements.txt"
+
+$modelFolders = @(
+    "models\\checkpoints",
+    "models\\vae",
+    "models\\loras",
+    "input",
+    "output",
+    "temp"
+)
+
+foreach ($folder in $modelFolders) {
+    New-Item -ItemType Directory -Force -Path (Join-Path $root "ComfyUI\\$folder") | Out-Null
+}
+
+Set-Content -Path "$root\\ComfyUI\\user\\remote_endpoints.yaml" -Value "sdxl: https://api.example.com/v1/inference"
+
+Compress-Archive -Path "$root\\*" -DestinationPath "ComfyUI_windows_portable_custom.7z"
+```
+
+Replace the remote endpoint placeholder with organisation-specific APIs when bundling hybrid local/remote experiences, and ensure the generated archive preserves the folder casing expected by `folder_paths.py` when extracted on Windows.【F:folder_paths.py†L16-L83】

@@ -20,3 +20,47 @@ Defines expectations for the official ComfyUI Desktop installers published for W
 
 ## Post-Install User Steps
 - After installation the only required user action is to copy model weights into the appropriate subfolders (checkpoints, VAEs, LoRAs, etc.), mirroring the manual instructions documented in the README.【F:README.md†L174-L199】
+
+## Reference Installer Blueprint
+Packaging teams can model their bundler after the following pseudocode to ensure parity with the runtime expectations while leaving room for remote model configuration.
+
+```python
+from __future__ import annotations
+
+from pathlib import Path
+
+import installer
+
+
+def build_package(source: Path, target: Path) -> None:
+    env = installer.VirtualEnv(python="3.12.7")
+    env.install_requirements(source / "requirements.txt")
+
+    layout = {
+        "root": target,
+        "app": target / "ComfyUI",
+        "python": target / "python",
+    }
+
+    installer.copy_tree(source, layout["app"], exclude={".git", "output", "temp"})
+    installer.embed_python(env, layout["python"])
+
+    for folder in ["input", "output", "temp", "user"]:
+        (layout["app"] / folder).mkdir(parents=True, exist_ok=True)
+
+    (layout["app"] / "user" / "remote_endpoints.yaml").write_text(
+        "sdxl: https://api.example.com/v1/inference\n"
+    )
+
+    installer.create_shortcut(
+        name="ComfyUI",
+        target=layout["python"] / "python.exe",
+        arguments="main.py --auto-launch",
+        icon=source / "assets" / "icon.ico",
+    )
+
+
+build_package(Path.cwd(), Path("dist/ComfyUI-Desktop"))
+```
+
+Integrate vendor-specific GPU runtimes, notarization, or code signing within this scaffold while keeping the bundled Python and directory layout aligned with `folder_paths.py` so downstream documentation remains accurate.【F:folder_paths.py†L16-L83】【F:main.py†L25-L350】
