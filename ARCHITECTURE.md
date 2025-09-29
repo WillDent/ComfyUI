@@ -1,30 +1,21 @@
 # Architecture and Dependency Management
 
-## Overview
-ComfyUI is a Python-based application for building and running stable diffusion workflows. The core code is executed by `main.py`, which configures runtime options and delegates requests to an asynchronous server.
+This index links to dedicated specification documents that describe each major subsystem involved in launching and operating ComfyUI. Use these specs to understand how the runtime is assembled, how assets are organised, and how the server communicates with bundled frontends.
 
-## Python Backend and Execution
-- `main.py` reads command-line arguments, configures model directories, and applies user-specified paths. It sets environment variables for devices and loads custom nodes before starting the main modules.
-- The prompt execution and HTTP interface are provided by `server.py`, which uses `aiohttp` and `websockets` to communicate with the frontend and manage a queue of jobs.
+## Runtime Lifecycle
+- [Runtime Initialization Specification](docs/specs/runtime_initialization.md) — step-by-step breakdown of `main.py`, covering CLI parsing, environment setup, custom node loading, device selection, prompt queue threading, and shutdown hygiene.【F:main.py†L1-L369】
+- [Prompt Server Specification](docs/specs/prompt_server_spec.md) — explains aiohttp middleware, websocket negotiation, REST endpoints, and how the `PromptQueue` interfaces with the worker thread.【F:server.py†L1-L371】【F:main.py†L168-L243】
 
-## Model and Asset Management
-- Paths for models and other resources are centralized in `folder_paths.py`, which sets up a `models` directory with subfolders for checkpoints, VAEs, LoRAs, diffusion models, etc., and defines output, temp, input, and user directories.
-- Users can extend or override these locations using an `extra_model_paths.yaml` configuration. The sample file shows how additional paths can be declared for multiple UIs or shared model storage.
+## Asset and Model Handling
+- [Model and Asset Management Specification](docs/specs/model_asset_management.md) — documents the directory schema defined in `folder_paths.py`, override mechanisms, cache helpers, and how extra model paths integrate into bundled installs.【F:folder_paths.py†L1-L214】【F:extra_model_paths.yaml.example†L1-L47】【F:main.py†L25-L57】
 
-## Python Environment and Dependencies
-- The project requires Python 3.9 or newer and defines its packaging metadata in `pyproject.toml`.
-- All runtime dependencies—including PyTorch, transformers, and server libraries—are listed in `requirements.txt` for easy installation via `pip`.
+## Python Environment Expectations
+- [Python Environment and Dependency Specification](docs/specs/python_environment_spec.md) — details the supported interpreter versions, pinned dependencies, frontend wheel enforcement, and accelerator-specific install paths that all distributions must respect.【F:main.py†L353-L360】【F:requirements.txt†L1-L30】【F:app/frontend_management.py†L1-L81】【F:README.md†L191-L315】
+- [Hardware Support Specification](docs/specs/hardware_support_spec.md) — consolidates README guidance for NVIDIA, AMD, Intel, Apple Silicon, DirectML, Ascend, Cambricon, and Iluvatar devices so packages can surface the correct driver and wheel instructions.【F:README.md†L200-L315】
 
-## Running ComfyUI Locally
-- The README provides several paths for end users: a pre-built desktop application, a Windows portable package, and manual installation. Manual setup involves cloning the repository, placing model files under `models/`, installing dependencies with `pip install -r requirements.txt`, and running `python main.py`.
-- GPU-specific instructions are included to guide users in installing the appropriate PyTorch build for AMD, Intel, or NVIDIA hardware.
+## Installation Pathways
+- [Manual Installation Specification](docs/specs/manual_install_spec.md) — describes how to clone, configure, and run ComfyUI from source while mirroring the bundled experience.【F:README.md†L191-L315】【F:main.py†L25-L350】
+- [User Responsibilities Specification](docs/specs/user_responsibilities_spec.md) — lists the post-install tasks end users must complete regardless of distribution, such as copying model weights and running bundled updaters.【F:README.md†L174-L200】【F:main.py†L25-L350】
 
-## Desktop Builds and OS-Specific Dependencies
-- A dedicated **ComfyUI Desktop** project assembles platform binaries from the stable core release so that end users receive a ready-to-run package built with the latest code.
-- Prebuilt desktop installers are published for Windows and macOS, bundling Python and required libraries so users only need to supply model files.
-- Windows users can alternatively download a portable archive that contains a full Python environment; they extract it, place checkpoints under `ComfyUI\models\checkpoints`, and run the included launcher.
-- Manual installation covers all operating systems and GPU types, but some platforms require special PyTorch builds—for example, a Metal-enabled nightly on Apple Silicon or `torch-directml` for AMD GPUs on Windows.
-
-## Summary
-Through a combination of a Python backend, an asynchronous web server, and a configurable model directory structure, ComfyUI packages complex AI dependencies in a way that allows non-developers to run advanced diffusion workflows locally. Users can either download a ready-to-run application or manually install Python and the required libraries to execute the system on their own hardware.
-
+## Frontend Delivery
+- [Frontend Delivery Specification](docs/specs/frontend_delivery_spec.md) — covers how the `comfyui-frontend-package` wheel is managed, how alternate frontends are fetched, and how the server serves static assets with feature flag negotiation.【F:requirements.txt†L1-L2】【F:app/frontend_management.py†L19-L214】【F:server.py†L175-L245】
